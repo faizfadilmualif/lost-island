@@ -1,0 +1,531 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#102c2a">
+<title>LOST ISLAND 2.0</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#102c2a;color:white;font-family:Arial,sans-serif;touch-action:none}
+canvas{display:block}
+button{color:white;background:#173b39e8;border:1px solid #ffffff55;border-radius:12px;padding:11px 13px;font-weight:bold;font-size:12px}
+button:active{background:#287b65}
+#hud{position:fixed;inset:0;pointer-events:none}
+.panel{background:#071b20d9;border:1px solid #ffffff35;border-radius:12px;padding:10px}
+#top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:8px}
+#stats{width:150px;font-size:11px}
+.bar{height:7px;background:#384747;border-radius:8px;margin:4px 0 8px;overflow:hidden}
+.fill{height:100%;width:100%;background:#45d68b}
+#info{position:absolute;top:130px;left:10px;font-size:11px;line-height:1.8}
+#clock{font-size:11px;color:#bce9dc}
+#controls{position:absolute;bottom:18px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:end}
+#stick{width:112px;height:112px;border-radius:50%;background:#ffffff20;border:2px solid #ffffff55;position:relative;pointer-events:auto;touch-action:none}
+#knob{width:46px;height:46px;border-radius:50%;background:#ffffffb5;position:absolute;left:31px;top:31px}
+.actions{display:grid;grid-template-columns:repeat(2,65px);gap:7px;pointer-events:auto}
+#message{position:absolute;bottom:145px;left:12px;right:12px;text-align:center;font-size:12px;text-shadow:0 2px 5px black}
+#menu{position:fixed;inset:0;background:#061615ef;z-index:5;display:none;overflow:auto;padding:22px}
+#menuContent{max-width:440px;margin:25px auto}
+.menuRow{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0;padding:10px;background:#ffffff12;border-radius:10px}
+#menu h2{color:#8ee5c1}
+#close{width:100%;margin-top:15px}
+#loading{position:fixed;inset:0;background:#071b20;z-index:10;display:grid;place-items:center;text-align:center}
+#loading h1{letter-spacing:5px;color:#8ee5c1}
+#topButtons{position:absolute;right:10px;top:105px;display:flex;gap:6px;pointer-events:auto}
+#topButtons button{padding:9px}
+</style>
+</head>
+<body>
+<div id="loading"><div><h1>LOST ISLAND</h1><p>Menyiapkan dunia...</p></div></div>
+
+<div id="hud">
+ <div id="top">
+  <div class="panel"><b>LOST ISLAND</b><br><small>Survival Adventure 2.0</small><br><span id="clock">Hari 1 • 08:00</span></div>
+  <div class="panel" id="stats">
+   ❤️ Kesehatan <span id="healthText">100</span><div class="bar"><div class="fill" id="health"></div></div>
+   🍖 Lapar <span id="hungerText">100</span><div class="bar"><div class="fill" id="hunger"></div></div>
+   💧 Haus <span id="thirstText">100</span><div class="bar"><div class="fill" id="thirst"></div></div>
+   ⚡ Stamina <span id="staminaText">100</span><div class="bar"><div class="fill" id="stamina"></div></div>
+  </div>
+ </div>
+
+ <div id="info" class="panel">
+  <b>INVENTARIS</b><br>
+  🌲 Kayu: <span id="wood">0</span><br>
+  🪨 Batu: <span id="stone">0</span><br>
+  🍓 Buah: <span id="berry">0</span><br>
+  💧 Air: <span id="waterCount">0</span><hr style="border-color:#ffffff33">
+  <span id="quest">Misi: Kumpulkan 5 kayu</span>
+ </div>
+
+ <div id="topButtons">
+  <button id="inventoryBtn">TAS</button>
+  <button id="craftBtn">CRAFT</button>
+  <button id="pauseBtn">MENU</button>
+ </div>
+
+ <div id="message">Jelajahi pulau dan kumpulkan sumber daya.</div>
+
+ <div id="controls">
+  <div id="stick"><div id="knob"></div></div>
+  <div class="actions">
+   <button id="runBtn">LARI</button>
+   <button id="actionBtn">AMBIL</button>
+   <button id="jumpBtn">LOMPAT</button>
+   <button id="saveBtn">SIMPAN</button>
+  </div>
+ </div>
+</div>
+
+<div id="menu">
+ <div id="menuContent">
+  <h2 id="menuTitle">INVENTARIS</h2>
+  <div id="menuBody"></div>
+  <button id="close">KEMBALI KE PERMAINAN</button>
+ </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x8acbd2);
+scene.fog=new THREE.Fog(0x8acbd2,35,95);
+
+const camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,180);
+const renderer=new THREE.WebGLRenderer({antialias:false,powerPreference:"low-power"});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.3));
+renderer.setSize(innerWidth,innerHeight);
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xc9efff,0x405b36,1.8));
+const sun=new THREE.DirectionalLight(0xffe4b0,1.8);
+sun.position.set(20,35,15);
+scene.add(sun);
+
+const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:1});
+const sandMat=mat(0xd8c18e);
+const grassMat=mat(0x3d7943);
+const trunkMat=mat(0x795039);
+const leafMat=mat(0x22683e);
+const rockMat=mat(0x777d7d);
+const berryMat=mat(0x9e244c);
+
+const waterSurface=new THREE.Mesh(
+ new THREE.PlaneGeometry(200,200),
+ new THREE.MeshStandardMaterial({color:0x147f9e,roughness:.35})
+);
+waterSurface.rotation.x=-Math.PI/2;
+waterSurface.position.y=-.5;
+scene.add(waterSurface);
+
+const island=new THREE.Mesh(new THREE.CylinderGeometry(23,27,3,48),sandMat);
+island.position.y=-1.7;
+scene.add(island);
+
+const land=new THREE.Mesh(new THREE.CircleGeometry(23,48),grassMat);
+land.rotation.x=-Math.PI/2;
+land.position.y=-.17;
+scene.add(land);
+
+const player=new THREE.Group();
+const body=new THREE.Mesh(new THREE.CapsuleGeometry(.4,.75,3,7),mat(0x2866a8));
+body.position.y=1.05;
+player.add(body);
+const head=new THREE.Mesh(new THREE.SphereGeometry(.28,9,7),mat(0xe1b28a));
+head.position.y=1.8;
+player.add(head);
+const legs=new THREE.Mesh(new THREE.BoxGeometry(.48,.6,.32),mat(0x303b48));
+legs.position.y=.3;
+player.add(legs);
+scene.add(player);
+
+const resources=[];
+
+function createTree(x,z,s=1){
+ const g=new THREE.Group();
+ const log=new THREE.Mesh(new THREE.CylinderGeometry(.15,.22,1.8*s,6),trunkMat);
+ log.position.y=.9*s;
+ g.add(log);
+ const crown=new THREE.Mesh(new THREE.SphereGeometry(1*s,7,6),leafMat);
+ crown.position.y=2*s;
+ g.add(crown);
+ g.position.set(x,0,z);
+ g.userData={type:"wood",amount:3};
+ scene.add(g);
+ resources.push(g);
+}
+
+function createRock(x,z){
+ const r=new THREE.Mesh(new THREE.DodecahedronGeometry(.48,0),rockMat);
+ r.position.set(x,.3,z);
+ r.scale.set(1,.7,.9);
+ r.userData={type:"stone",amount:2};
+ scene.add(r);
+ resources.push(r);
+}
+
+function createBush(x,z){
+ const g=new THREE.Group();
+ const bush=new THREE.Mesh(new THREE.SphereGeometry(.65,7,6),leafMat);
+ bush.position.y=.55;
+ g.add(bush);
+ for(let i=0;i<4;i++){
+  const fruit=new THREE.Mesh(new THREE.SphereGeometry(.12,6,5),berryMat);
+  fruit.position.set((Math.random()-.5)*.8,.6+Math.random()*.4,(Math.random()-.5)*.8);
+  g.add(fruit);
+ }
+ g.position.set(x,0,z);
+ g.userData={type:"berry",amount:3};
+ scene.add(g);
+ resources.push(g);
+}
+
+function createWaterSource(x,z){
+ const source=new THREE.Mesh(
+  new THREE.CylinderGeometry(.8,.9,.12,12),
+  new THREE.MeshStandardMaterial({color:0x32bde0,transparent:true,opacity:.8})
+ );
+ source.position.set(x,.03,z);
+ source.userData={type:"water",amount:2};
+ scene.add(source);
+ resources.push(source);
+}
+
+for(let i=0;i<24;i++){
+ const a=Math.random()*Math.PI*2,r=7+Math.random()*13;
+ createTree(Math.cos(a)*r,Math.sin(a)*r,.7+Math.random()*.4);
+}
+for(let i=0;i<15;i++){
+ const a=Math.random()*Math.PI*2,r=4+Math.random()*17;
+ createRock(Math.cos(a)*r,Math.sin(a)*r);
+}
+for(let i=0;i<9;i++){
+ const a=Math.random()*Math.PI*2,r=5+Math.random()*13;
+ createBush(Math.cos(a)*r,Math.sin(a)*r);
+}
+createWaterSource(5,5);
+createWaterSource(-8,4);
+createWaterSource(10,-6);
+
+const data={
+ health:100,hunger:100,thirst:100,stamina:100,
+ wood:0,stone:0,berry:0,water:0,
+ day:1,time:8,shelter:false
+};
+
+let running=false,velocityY=0,paused=false;
+let moveX=0,moveY=0,messageTimer=0;
+
+function message(t){
+ document.getElementById("message").textContent=t;
+ messageTimer=3;
+}
+
+function updateHUD(){
+ for(const field of ["health","hunger","thirst","stamina"]){
+  const value=Math.round(data[field]);
+  document.getElementById(field).style.width=value+"%";
+  document.getElementById(field+"Text").textContent=value;
+ }
+ for(const field of ["wood","stone","berry","water"]){
+  document.getElementById(field==="water"?"waterCount":field).textContent=data[field];
+ }
+ document.getElementById("clock").textContent=
+  "Hari "+data.day+" • "+String(Math.floor(data.time)).padStart(2,"0")+":00";
+}
+
+const stick=document.getElementById("stick");
+const knob=document.getElementById("knob");
+let stickActive=false;
+
+function joystick(e){
+ const rect=stick.getBoundingClientRect();
+ const x=e.clientX-(rect.left+56);
+ const y=e.clientY-(rect.top+56);
+ const d=Math.hypot(x,y),m=Math.min(36,d);
+ const nx=d?x/d:0,ny=d?y/d:0;
+ knob.style.left=(33+nx*m)+"px";
+ knob.style.top=(33+ny*m)+"px";
+ moveX=nx*m/36;
+ moveY=ny*m/36;
+}
+stick.addEventListener("pointerdown",e=>{
+ stickActive=true;
+ stick.setPointerCapture(e.pointerId);
+ joystick(e);
+});
+stick.addEventListener("pointermove",e=>{if(stickActive)joystick(e)});
+function stopStick(){
+ stickActive=false;moveX=0;moveY=0;
+ knob.style.left="31px";knob.style.top="31px";
+}
+stick.addEventListener("pointerup",stopStick);
+stick.addEventListener("pointercancel",stopStick);
+
+function collect(){
+ let nearest=null,nearestDistance=3.2;
+ for(const obj of resources){
+  if(!obj.parent)continue;
+  const d=obj.position.distanceTo(player.position);
+  if(d<nearestDistance){nearest=obj;nearestDistance=d}
+ }
+ if(!nearest){message("Tidak ada sumber daya di dekatmu.");return}
+ const type=nearest.userData.type;
+ data[type]+=nearest.userData.amount;
+ scene.remove(nearest);
+ message({
+  wood:"Kamu mendapatkan kayu!",
+  stone:"Kamu mendapatkan batu!",
+  berry:"Kamu mendapatkan buah!",
+  water:"Kamu mendapatkan air!"
+ }[type]);
+ updateHUD();
+ updateQuest();
+}
+document.getElementById("actionBtn").onclick=collect;
+
+function eat(){
+ if(data.berry<=0){message("Kamu tidak punya buah.");return}
+ data.berry--;
+ data.hunger=Math.min(100,data.hunger+25);
+ message("Kamu memakan buah.");
+ updateHUD();
+}
+function drink(){
+ if(data.water<=0){message("Persediaan air kosong.");return}
+ data.water--;
+ data.thirst=Math.min(100,data.thirst+35);
+ message("Kamu minum air.");
+ updateHUD();
+}
+
+function craftShelter(){
+ if(data.shelter){message("Tempat berlindung sudah dibuat.");return}
+ if(data.wood<5||data.stone<3){
+  message("Butuh 5 kayu dan 3 batu.");
+  return;
+ }
+ data.wood-=5;data.stone-=3;data.shelter=true;
+ const house=new THREE.Group();
+ const base=new THREE.Mesh(new THREE.BoxGeometry(3,.25,2.5),trunkMat);
+ base.position.y=.2;
+ house.add(base);
+ const roof=new THREE.Mesh(new THREE.ConeGeometry(2.2,1.5,4),mat(0x79503a));
+ roof.position.y=1.7;
+ roof.rotation.y=Math.PI/4;
+ house.add(roof);
+ house.position.set(player.position.x+3,0,player.position.z+2);
+ scene.add(house);
+ message("Tempat berlindung berhasil dibuat!");
+ updateHUD();updateQuest();
+}
+
+const menu=document.getElementById("menu");
+const menuTitle=document.getElementById("menuTitle");
+const menuBody=document.getElementById("menuBody");
+
+function openMenu(title,html){
+ paused=true;
+ menuTitle.textContent=title;
+ menuBody.innerHTML=html;
+ menu.style.display="block";
+}
+function closeMenu(){
+ menu.style.display="none";
+ paused=false;
+}
+document.getElementById("close").onclick=closeMenu;
+
+document.getElementById("inventoryBtn").onclick=()=>{
+ openMenu("INVENTARIS",`
+  <div class="menuRow"><span>🌲 Kayu</span><b>${data.wood}</b></div>
+  <div class="menuRow"><span>🪨 Batu</span><b>${data.stone}</b></div>
+  <div class="menuRow"><span>🍓 Buah</span><b>${data.berry}</b></div>
+  <div class="menuRow"><span>💧 Air</span><b>${data.water}</b></div>
+  <button id="eatBtn">MAKAN BUAH</button>
+  <button id="drinkBtn">MINUM AIR</button>
+ `);
+ document.getElementById("eatBtn").onclick=()=>{eat();closeMenu()};
+ document.getElementById("drinkBtn").onclick=()=>{drink();closeMenu()};
+};
+
+document.getElementById("craftBtn").onclick=()=>{
+ openMenu("CRAFTING",`
+  <p>Tempat berlindung sederhana</p>
+  <div class="menuRow"><span>🌲 Kayu diperlukan</span><b>5</b></div>
+  <div class="menuRow"><span>🪨 Batu diperlukan</span><b>3</b></div>
+  <button id="buildBtn">BUAT TEMPAT BERLINDUNG</button>
+ `);
+ document.getElementById("buildBtn").onclick=()=>{
+  craftShelter();closeMenu();
+ };
+};
+
+function saveGame(){
+ const save={...data,x:player.position.x,z:player.position.z};
+ try{
+  localStorage.setItem("lostIslandSave",JSON.stringify(save));
+  message("Permainan berhasil disimpan.");
+ }catch(e){message("Penyimpanan gagal.")}
+ closeMenu();
+}
+
+function loadGame(){
+ try{
+  const save=JSON.parse(localStorage.getItem("lostIslandSave"));
+  if(!save)return;
+  for(const key of Object.keys(data)){
+   if(save[key]!==undefined)data[key]=save[key];
+  }
+  player.position.set(save.x||0,0,save.z||0);
+ }catch(e){console.log("Save tidak dapat dibaca")}
+}
+document.getElementById("saveBtn").onclick=saveGame;
+document.getElementById("pauseBtn").onclick=()=>{
+ openMenu("MENU PERMAINAN",`
+  <p>LOST ISLAND 2.0</p>
+  <div class="menuRow"><span>Hari</span><b>${data.day}</b></div>
+  <div class="menuRow"><span>Tempat berlindung</span><b>${data.shelter?"Sudah dibuat":"Belum dibuat"}</b></div>
+  <button id="menuSave">SIMPAN PERMAINAN</button>
+ `);
+ document.getElementById("menuSave").onclick=saveGame;
+};
+
+function updateQuest(){
+ let text="Misi: Kumpulkan 5 kayu";
+ if(data.wood>=5)text="Misi: Kumpulkan 3 batu";
+ if(data.wood>=5&&data.stone>=3)text="Misi: Buat tempat berlindung";
+ if(data.shelter)text="Misi selesai! Jelajahi pulau.";
+ document.getElementById("quest").textContent=text;
+}
+
+const rainCount=100;
+const rainPositions=new Float32Array(rainCount*3);
+for(let i=0;i<rainCount;i++){
+ rainPositions[i*3]=(Math.random()-.5)*35;
+ rainPositions[i*3+1]=Math.random()*15;
+ rainPositions[i*3+2]=(Math.random()-.5)*35;
+}
+const rainGeometry=new THREE.BufferGeometry();
+rainGeometry.setAttribute("position",new THREE.BufferAttribute(rainPositions,3));
+const rain=new THREE.Points(rainGeometry,new THREE.PointsMaterial({color:0xcdeeff,size:.07}));
+rain.visible=false;
+scene.add(rain);
+
+let weatherTimer=0,raining=false;
+function updateWeather(dt){
+ weatherTimer+=dt;
+ if(weatherTimer>100){
+  weatherTimer=0;
+  raining=Math.random()<.45;
+  rain.visible=raining;
+  message(raining?"Hujan mulai turun.":"Cuaca kembali cerah.");
+ }
+ if(raining){
+  const p=rain.geometry.attributes.position;
+  for(let i=0;i<rainCount;i++){
+   p.array[i*3+1]-=12*dt;
+   if(p.array[i*3+1]<0)p.array[i*3+1]=15;
+  }
+  p.needsUpdate=true;
+ }
+}
+
+function updateDayNight(dt){
+ data.time+=dt*.12;
+ if(data.time>=24){
+  data.time=0;data.day++;
+  message("Hari baru telah dimulai!");
+ }
+ const daylight=Math.max(0,Math.sin((data.time-6)/24*Math.PI*2));
+ sun.intensity=.25+daylight*1.8;
+ hemi.intensity=.35+daylight*1.5;
+ const sky=new THREE.Color().lerpColors(
+  new THREE.Color(0x101c35),new THREE.Color(0x8acbd2),daylight
+ );
+ scene.background=sky;
+ scene.fog.color.copy(sky);
+}
+
+let survivalTimer=0;
+function updateSurvival(dt){
+ survivalTimer+=dt;
+ if(survivalTimer>=5){
+  survivalTimer=0;
+  data.hunger=Math.max(0,data.hunger-.7);
+  data.thirst=Math.max(0,data.thirst-1);
+  if(data.hunger<=0||data.thirst<=0){
+   data.health=Math.max(0,data.health-2);
+  }
+  if(data.health<=0){
+   message("Kesehatan habis. Muat simpanan untuk melanjutkan.");
+   paused=true;
+  }
+  updateHUD();
+ }
+}
+
+document.getElementById("runBtn").onclick=()=>{
+ running=!running;
+ message(running?"Mode lari aktif.":"Mode berjalan aktif.");
+};
+document.getElementById("jumpBtn").onclick=()=>{
+ if(player.position.y<=.01)velocityY=6;
+};
+
+const clock=new THREE.Clock();
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.04);
+ if(!paused){
+  updateDayNight(dt);
+  updateWeather(dt);
+  updateSurvival(dt);
+  const moving=Math.abs(moveX)+Math.abs(moveY)>.08;
+  const speed=running&&data.stamina>0?7:3.5;
+  if(moving&&running)data.stamina=Math.max(0,data.stamina-13*dt);
+  else data.stamina=Math.min(100,data.stamina+8*dt);
+  if(moving){
+   const direction=new THREE.Vector3(-moveX,0,-moveY).normalize();
+   player.position.addScaledVector(direction,speed*dt);
+   player.rotation.y=Math.atan2(direction.x,direction.z);
+  }
+  const distance=Math.hypot(player.position.x,player.position.z);
+  if(distance>21){
+   player.position.x*=21/distance;
+   player.position.z*=21/distance;
+  }
+  velocityY-=15*dt;
+  player.position.y=Math.max(0,player.position.y+velocityY*dt);
+  if(player.position.y===0)velocityY=0;
+  const desired=new THREE.Vector3(
+   player.position.x+moveX*1.5,
+   player.position.y+6,
+   player.position.z+8
+  );
+  camera.position.lerp(desired,.09);
+  camera.lookAt(player.position.x,player.position.y+1.3,player.position.z);
+  if(messageTimer>0)messageTimer-=dt;
+  updateHUD();
+ }
+ renderer.render(scene,camera);
+}
+
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+ renderer.setPixelRatio(Math.min(devicePixelRatio,1.3));
+});
+
+loadGame();
+updateHUD();
+updateQuest();
+animate();
+document.getElementById("loading").style.display="none";
+</script>
+</body>
+</html>
